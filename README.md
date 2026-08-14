@@ -1,4 +1,4 @@
-# @dsh-community/dsh-manager
+# @snowsalt/dsh-manager
 
 ComfyUI-Manager-style plugin marketplace for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).
 
@@ -16,7 +16,7 @@ ComfyUI-Manager-style plugin marketplace for [DeepSeek Harness](https://github.c
 
 ```bash
 # 1. Add the plugin to the web profile
-dsh plugin --profile web add @dsh-community/dsh-manager
+dsh plugin --profile web add @snowsalt/dsh-manager
 
 # 2. Start the harness web UI
 dsh web

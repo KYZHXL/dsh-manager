@@ -6,4 +6,4 @@
 
 - insert:
     - id: dsh-manager-host
-      name: '@dsh-community/dsh-manager/host'
+      name: '@snowsalt/dsh-manager/host'

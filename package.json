@@ -1,6 +1,6 @@
 {
-  "name": "@dsh-community/dsh-manager",
-  "version": "0.1.0",
+  "name": "@snowsalt/dsh-manager",
+  "version": "0.2.0",
   "description": "ComfyUI-Manager-style plugin marketplace for DeepSeek Harness: browse, install, update, and remove dsh plugins. Download and use — no special build needed.",
   "type": "module",
   "license": "MIT",
