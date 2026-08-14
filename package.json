@@ -1,0 +1,49 @@
+{
+  "name": "@dsh-community/dsh-manager",
+  "version": "0.1.0",
+  "description": "ComfyUI-Manager-style plugin marketplace for DeepSeek Harness: browse, install, update, and remove dsh plugins. Download and use — no special build needed.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KYZHXL/dsh-manager.git"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./host": {
+      "types": "./lib/types/host/index.d.ts",
+      "default": "./lib/host/index.js"
+    },
+    "./web/market.html": "./lib/web/market.html",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -b tsconfig.json --noEmit",
+    "publish": "npm run build && npm publish --access public"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-host-webserver": "^0.0.1-rc.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-host-webserver": "^0.0.1-rc.1",
+    "@types/node": "^26.2.0",
+    "typescript": "^6.0.3"
+  }
+}

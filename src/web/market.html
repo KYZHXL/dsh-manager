@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>dsh Plugin Manager</title>
+  <style>
+    :root {
+      --bg: #111214;
+      --panel: #1a1b1e;
+      --panel2: #222327;
+      --border: #2c2e33;
+      --text: #e8e8ea;
+      --dim: #9a9ba1;
+      --accent: #4176e6;
+      --green: #34c97b;
+      --red: #ec5f5f;
+      --mono: "Cascadia Code", Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 10;
+    }
+    header h1 { font-size: 18px; font-weight: 600; }
+    header .sub { color: var(--dim); font-size: 13px; }
+    header .spacer { flex: 1; }
+    header .count { font-size: 13px; color: var(--dim); }
+    .toolbar {
+      display: flex; gap: 10px; padding: 14px 24px;
+      border-bottom: 1px solid var(--border); align-items: center; flex-wrap: wrap;
+    }
+    .toolbar input[type="search"] {
+      flex: 1; min-width: 240px; max-width: 420px; padding: 8px 12px;
+      border: 1px solid var(--border); border-radius: 8px;
+      background: var(--panel); color: var(--text); font-size: 13px; outline: none;
+    }
+    .toolbar input[type="search"]:focus { border-color: var(--accent); }
+    .btn {
+      padding: 8px 16px; border: 1px solid var(--border); border-radius: 8px;
+      background: var(--panel2); color: var(--text); font-size: 13px; cursor: pointer;
+    }
+    .btn:hover:not(:disabled) { background: #2b2c31; }
+    .btn:disabled { opacity: 0.5; cursor: default; }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn.primary:hover:not(:disabled) { background: #5b8af0; }
+    .btn.danger { color: var(--red); }
+    main { padding: 16px 24px; display: flex; flex-direction: column; gap: 12px; }
+    .card {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 14px 16px; display: flex; gap: 14px; align-items: flex-start;
+    }
+    .card .info { flex: 1; min-width: 0; }
+    .card .title { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .tag {
+      font-size: 11px; padding: 1px 7px; border-radius: 4px;
+      border: 1px solid var(--border); color: var(--dim);
+    }
+    .tag.official { color: #5b8af0; border-color: #2c3a5e; }
+    .tag.npm { color: var(--dim); }
+    .tag.registry { color: var(--green); border-color: #1f3d2f; }
+    .version { font-family: var(--mono); font-size: 12px; color: var(--dim); }
+    .author { font-size: 12px; color: var(--dim); }
+    .desc { color: var(--dim); font-size: 13px; margin-top: 6px; line-height: 1.5; }
+    .src { font-family: var(--mono); font-size: 12px; color: var(--dim); margin-top: 6px; display: block; overflow-wrap: anywhere; }
+    .status { margin-top: 8px; font-size: 12px; color: var(--dim); }
+    .status .installed { color: var(--green); }
+    .actions { display: flex; gap: 6px; flex: none; }
+    .empty { color: var(--dim); font-size: 13px; text-align: center; padding: 32px; }
+    .warnings { padding: 10px 14px; border: 1px dashed var(--border); border-radius: 8px; }
+    .warnings p { color: #e8b14d; font-size: 12px; line-height: 1.6; }
+    .loading { color: var(--dim); text-align: center; padding: 32px; }
+    .error { color: var(--red); font-size: 13px; text-align: center; padding: 24px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>dsh Plugin Manager</h1>
+    <span class="sub">DeepSeek Harness 插件市场</span>
+    <span class="spacer"></span>
+    <span class="count" id="count">0 plugins</span>
+  </header>
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="搜索插件…">
+    <button class="btn" id="refresh">刷新</button>
+    <button class="btn primary" id="update-all">更新全部</button>
+  </div>
+  <main id="market">
+    <div class="loading">正在加载插件市场…</div>
+  </main>
+  <script>
+    const API = '/api/dsh-manager'
+    let market = []
+    let warnings = []
+    let filter = ''
+
+    const $ = (id) => document.getElementById(id)
+    const el = (tag, cls, text) => {
+      const node = document.createElement(tag)
+      if (cls) node.className = cls
+      if (text !== undefined) node.textContent = text
+      return node
+    }
+
+    async function snapshot() {
+      const res = await fetch(API + '/snapshot')
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error || 'snapshot failed')
+      market = data.market || []
+      warnings = data.warnings || []
+      return { market, warnings }
+    }
+
+    async function act(path, id) {
+      const res = await fetch(API + path, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: id === undefined ? '{}' : JSON.stringify({ id }),
+      })
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error || 'operation failed')
+    }
+
+    function tagOf(sourceOf) {
+      if (sourceOf === 'official') return ['tag official', '官方']
+      if (sourceOf === 'registry') return ['tag registry', '社区']
+      return ['tag npm', 'npm']
+    }
+
+    function render() {
+      $('count').textContent = `${market.length} plugins`
+      const needle = filter.toLowerCase()
+      const rows = market.filter(p =>
+        !needle || p.title.toLowerCase().includes(needle) || p.source.toLowerCase().includes(needle))
+      const box = $('market')
+      if (rows.length === 0) {
+        box.innerHTML = '<div class="empty">没有匹配的插件</div>'
+        return
+      }
+      box.innerHTML = ''
+      if (warnings.length > 0) {
+        const w = el('div', 'warnings')
+        warnings.forEach(msg => w.appendChild(el('p', '', msg)))
+        box.appendChild(w)
+      }
+      rows.forEach(p => {
+        const card = el('div', 'card')
+        const info = el('div', 'info')
+        const title = el('div', 'title')
+        title.appendChild(el('strong', '', p.title))
+        const [tcls, tlabel] = tagOf(p.sourceOf)
+        title.appendChild(el('span', tcls, tlabel))
+        if (p.version) title.appendChild(el('span', 'version', p.version))
+        if (p.author) title.appendChild(el('span', 'author', p.author))
+        info.appendChild(title)
+        if (p.description) info.appendChild(el('p', 'desc', p.description))
+        info.appendChild(el('code', 'src', p.source))
+        const status = el('div', 'status')
+        status.appendChild(p.installed ? el('span', 'installed', '● 已安装') : el('span', '', '未安装'))
+        info.appendChild(status)
+        card.appendChild(info)
+        const actions = el('div', 'actions')
+        const btn = el('button', p.installed ? 'btn danger' : 'btn primary', p.installed ? '卸载' : '安装')
+        btn.onclick = async () => {
+          btn.disabled = true
+          btn.textContent = '处理中…'
+          try {
+            await act(p.installed ? '/uninstall' : '/install', p.id)
+            await load()
+          } catch (e) {
+            alert('操作失败: ' + e.message)
+            btn.disabled = false
+            btn.textContent = p.installed ? '卸载' : '安装'
+          }
+        }
+        actions.appendChild(btn)
+        card.appendChild(actions)
+        box.appendChild(card)
+      })
+    }
+
+    async function load() {
+      $('market').innerHTML = '<div class="loading">正在加载插件市场…</div>'
+      try {
+        await snapshot()
+        render()
+      } catch (e) {
+        $('market').innerHTML = `<div class="error">加载失败: ${e.message}</div>`
+      }
+    }
+
+    $('search').addEventListener('input', (e) => { filter = e.target.value; render() })
+    $('refresh').addEventListener('click', load)
+    $('update-all').addEventListener('click', async () => {
+      try {
+        await act('/update')
+        await load()
+      } catch (e) { alert('更新失败: ' + e.message) }
+    })
+    load()
+  </script>
+</body>
+</html>

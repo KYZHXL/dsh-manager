@@ -1,0 +1,9 @@
+# @dsh-community/dsh-manager bundle patch.
+#
+# Adds the plugin-manager host service to a dsh profile. The host registers
+# `/api/dsh-manager/*` routes (snapshot / install / uninstall / update) plus a
+# standalone market page at `/dsh-manager`, served by the harness webserver.
+
+- insert:
+    - id: dsh-manager-host
+      name: '@dsh-community/dsh-manager/host'
