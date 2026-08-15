@@ -40,10 +40,11 @@ export const name = 'dsh-manager-host'
 /** Services this plugin needs before mounting. */
 export const inject = ['webServer']
 
-/** npm registry search endpoints, primary then CN mirror fallback. */
+/** npm registry search endpoints, primary then CN mirror fallback. Paged at
+ * the search cap (250) with `from=` appended per page. */
 const NPM_SEARCH_URLS = [
-  'https://registry.npmjs.org/-/v1/search?text=keywords:dsh-plugin%20OR%20scope:deepseek-ai&size=100',
-  'https://registry.npmmirror.com/-/v1/search?text=keywords:dsh-plugin%20OR%20scope:deepseek-ai&size=100',
+  'https://registry.npmjs.org/-/v1/search?text=dsh-&size=250&from=',
+  'https://registry.npmmirror.com/-/v1/search?text=dsh-&size=250&from=',
 ]
 
 /** Remote community registry JSON, GitHub raw then jsDelivr mirror. */
@@ -90,33 +91,43 @@ function runPlugin(args: readonly string[]): Promise<void> {
   })
 }
 
-/** Search npm for dsh plugins, with mirror fallback. */
+/** Search npm for dsh plugins, with mirror fallback and cross-page dedup. */
 async function searchNpm(): Promise<{ name: string; version: string; description?: string; author?: string; reference?: string }[]> {
-  for (const url of NPM_SEARCH_URLS) {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  for (const base of NPM_SEARCH_URLS) {
     try {
-      const response = await fetch(url, { signal: controller.signal })
-      if (!response.ok) continue
-      const data = await response.json() as { objects?: { package: { name: string; version: string; description?: string; author?: { name?: string } | string; links?: { repository?: string } } }[] }
+      const pages = await Promise.all([0, 250, 500, 750].map(async (from) => {
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+        try {
+          const response = await fetch(`${base}${from}`, { signal: controller.signal })
+          if (!response.ok) throw new Error(`npm search HTTP ${response.status}`)
+          const data = await response.json() as { objects?: { package: { name: string; version: string; description?: string; author?: { name?: string } | string; links?: { repository?: string } } }[] }
+          return data.objects ?? []
+        } finally {
+          clearTimeout(timer)
+        }
+      }))
+      const seen = new Set<string>()
       const entries: { name: string; version: string; description?: string; author?: string; reference?: string }[] = []
-      for (const obj of data.objects ?? []) {
-        const pkg = obj.package
-        if (/dsh-(base|web-app|headless|bundle)$/.test(pkg.name)) continue
-        const author = typeof pkg.author === 'string' ? pkg.author : pkg.author?.name
-        entries.push({
-          name: pkg.name,
-          version: pkg.version,
-          ...pkg.description !== undefined ? { description: pkg.description } : {},
-          ...author !== undefined ? { author } : {},
-          ...pkg.links?.repository !== undefined ? { reference: pkg.links.repository } : {},
-        })
+      for (const page of pages) {
+        for (const obj of page) {
+          const pkg = obj.package
+          if (!pkg.name.includes('dsh-') || /dsh-(base|web-app|headless|bundle)$/.test(pkg.name)) continue
+          if (seen.has(pkg.name)) continue
+          seen.add(pkg.name)
+          const author = typeof pkg.author === 'string' ? pkg.author : pkg.author?.name
+          entries.push({
+            name: pkg.name,
+            version: pkg.version,
+            ...pkg.description !== undefined ? { description: pkg.description } : {},
+            ...author !== undefined ? { author } : {},
+            ...pkg.links?.repository !== undefined ? { reference: pkg.links.repository } : {},
+          })
+        }
       }
       return entries
     } catch {
       // fall through to mirror
-    } finally {
-      clearTimeout(timer)
     }
   }
   return []
